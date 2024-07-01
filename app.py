@@ -5,14 +5,15 @@ import openai
 import numpy as np
 from pdf2image import convert_from_path
 import easyocr
+from spellchecker import SpellChecker
 
 # Load the OpenAI API key from an environment variable or directly (not recommended in production)
-api_key = "sk-proj-KBb03PKBfYzltEa8RJ8eT3BlbkFJMUvZOj2n7k3Mip74Igdp"
+api_key = "sk-proj-VKAsVR32RCUTdhjh2MKXT3BlbkFJD93dBuFOG303eLbjpkqa"
 if not api_key:
     st.error("OpenAI API key not found. Please set the OPENAI_API_KEY environment variable.")
 else:
     openai.api_key = api_key
-
+ 
 # Lazy load heavy libraries to improve initial load time
 def load_ocr_tools():
     return easyocr.Reader(['en'])
@@ -22,11 +23,15 @@ reader = load_ocr_tools()
 # Function to process images and extract text
 def ocr_image(image):
     try:
-        bounds = reader.readtext(np.array(image))
-        return '\n'.join([b[1] for b in bounds])
+        # Adjusting OCR settings for handwritten text detection
+        reader = easyocr.Reader(['en'], gpu=False, model_storage_directory='.')
+        
+        bounds = reader.readtext(np.array(image), detail=0, allowlist='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        return '\n'.join([b for b in bounds])
     except Exception as e:
         st.error(f"Failed to process image: {str(e)}")
         return ""
+
 
 # Function to process PDFs and extract text
 def ocr_pdf(pdf_file):
@@ -37,6 +42,20 @@ def ocr_pdf(pdf_file):
     except Exception as e:
         st.error(f"Failed to process PDF: {str(e)}")
         return ""
+
+# Function to autocorrect the extracted text
+def autocorrect_text(extracted_text):
+    spell = SpellChecker()
+    corrected_text = []
+    
+    # Split text into words and autocorrect each word
+    words = extracted_text.split()
+    for word in words:
+        corrected_word = spell.correction(word)
+        corrected_text.append(corrected_word)
+    
+    # Join corrected words back into a single string
+    return ' '.join(corrected_text)
 
 # Function to interact with OpenAI GPT and get page range, chapter name, and topic
 def get_chatgpt_response(extracted_text):
@@ -54,7 +73,7 @@ def get_chatgpt_response(extracted_text):
         return "Error obtaining response."
 
 # Streamlit UI setup
-st.title("NCERT Class 11 & 12 Text Helper")
+st.title("NCERT Textbook Helper")
 
 # File uploader for PDF and image files
 uploaded_file = st.file_uploader("Upload an Image or PDF from NCERT Books", type=["png", "jpg", "jpeg", "pdf"])
